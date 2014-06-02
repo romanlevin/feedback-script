@@ -4,11 +4,6 @@ from collections import defaultdict
 import smtplib
 import argparse
 
-USERNAME, PASSWORD = '', ''
-
-USER_FILE = 'users.json'
-FEEDBACK_FILE = 'safe_feedback.csv'
-
 HEADER_TEMPLATE = u"""From: {from_name} <{from_email}>
 To: {to_name} <{to_email}>
 Subject: Feedback
@@ -38,57 +33,6 @@ def u(s):
         return result
 
 
-def parse_users():
-    with open(USER_FILE) as user_file:
-        user_list = json.load(user_file)
-
-    user_dict = {}
-    for user in user_list:
-        email, name = u(user['email']), u(user['name'])
-        user_dict[name] = email
-
-    return user_dict
-
-
-def parse_feedback():
-    feedback_dict = defaultdict(list)
-    fieldnames = ('date', 'name', 'grade', 'do', '_', 'dont')
-    exclude = ('name', '_')
-    with open(FEEDBACK_FILE, 'rb') as feedback_file:
-        feedback_reader = csv.DictReader(
-            feedback_file, fieldnames=fieldnames)
-        for row in feedback_reader:
-            name = u(row['name'])
-            data = {
-                key: u(value) for key, value in row.items()
-                if not key in exclude}
-            feedback_dict[name].append(data)
-    return feedback_dict
-
-
-def format_feedback(name, email, feedback, username):
-    header = HEADER_TEMPLATE.format(
-        to_name=name, to_email=email, from_name=username,
-        from_email=username)
-    message = header
-    for feedback_item in feedback[name]:
-        message += ROW_TEMPLATE.format(**feedback_item)
-    return message
-
-
-def connect(username, password):
-    server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.ehlo()
-    server.starttls()
-    server.login(username, password)
-    return server
-
-
-def send_email(name, email, feedback, server, username):
-    message = format_feedback(name, email, feedback, username)
-    server.sendmail(username, [email], message)
-
-
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--username', required=True)
@@ -97,12 +41,76 @@ def parse():
     return args.username, args.password
 
 
+class FeedbackSender(object):
+
+    USER_FILE = 'users.json'
+    FEEDBACK_FILE = 'safe_feedback.csv'
+
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+        self.connect()
+        self.parse_users()
+        self.parse_feedback()
+
+    def connect(self):
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.ehlo()
+        server.starttls()
+        server.login(username, password)
+        self.server = server
+
+    def parse_users(self):
+        with open(self.USER_FILE) as user_file:
+            user_list = json.load(user_file)
+
+        user_dict = {}
+        for user in user_list:
+            email, name = u(user['email']), u(user['name'])
+            user_dict[name] = email
+
+        self.users = user_dict
+
+    def parse_feedback(self):
+        feedback_dict = defaultdict(list)
+        fieldnames = ('date', 'name', 'grade', 'do', '_', 'dont')
+        exclude = ('name', '_')
+        with open(self.FEEDBACK_FILE, 'rb') as feedback_file:
+            feedback_reader = csv.DictReader(
+                feedback_file, fieldnames=fieldnames)
+            for row in feedback_reader:
+                name = u(row['name'])
+                data = {
+                    key: u(value) for key, value in row.items()
+                    if not key in exclude}
+                feedback_dict[name].append(data)
+        self.feedback = feedback_dict
+
+    def format_feedback(self, name, email):
+        header = HEADER_TEMPLATE.format(
+            to_name=name, to_email=email, from_name=username,
+            from_email=username)
+        message = header
+        for feedback_item in self.feedback[name]:
+            message += ROW_TEMPLATE.format(**feedback_item)
+        return message
+
+    def send_email(self, name, email):
+        message = self.format_feedback(name, email)
+        self.server.sendmail(username, [email], message)
+
+    def send_feedback(self):
+        for name in self.feedback:
+            email = self.users[name]
+            self.send_email(name, email)
+            print 'Email sent to {}.'.format(name)
+
+    def destroy(self):
+        self.server.quit()
+
+
 if __name__ == '__main__':
     username, password = parse()
-    server = connect(username, password)
-    users = parse_users()
-    feedback = parse_feedback()
-    for name in feedback:
-        email = users[name]
-        send_email(name, email, feedback, server, username)
-    server.quit()
+    feedback_sender = FeedbackSender(username, password)
+    feedback_sender.send_feedback()
+    feedback_sender.destroy()
