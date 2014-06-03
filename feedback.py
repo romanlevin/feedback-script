@@ -1,3 +1,14 @@
+#!/usr/bin/env python
+"""
+Feedback Sender Script
+
+Usage:
+./feedback.py - Runs in TEST MODE. Does not connect to Gmail, prints all
+    emails.
+./feedback.py [-u email] [-p password] - Connects to Gmail, sends all feedback,
+    to the appropriate users.
+"""
+
 import json
 import csv
 from collections import defaultdict
@@ -35,8 +46,8 @@ def u(s):
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-u', '--username', required=True)
-    parser.add_argument('-p', '--password', required=True)
+    parser.add_argument('-u', '--username', default=None)
+    parser.add_argument('-p', '--password', default=None)
     args = parser.parse_args()
     return args.username, args.password
 
@@ -46,14 +57,21 @@ class FeedbackSender(object):
     USER_FILE = 'users.json'
     FEEDBACK_FILE = 'safe_feedback.csv'
 
-    def __init__(self, username, password):
+    def __init__(self, username=None, password=None):
+        self.test = username is None or password is None
         self.username = username
         self.password = password
-        self.connect()
+
         self.parse_users()
         self.parse_feedback()
 
+        self.connect()
+        self.send_feedback()
+        self.destroy()
+
     def connect(self):
+        if self.test:
+            return
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.ehlo()
         server.starttls()
@@ -97,20 +115,23 @@ class FeedbackSender(object):
 
     def send_email(self, name, email):
         message = self.format_feedback(name, email)
-        self.server.sendmail(username, [email], message)
+        if not self.test:
+            self.server.sendmail(username, [email], message)
+        else:
+            print message
 
     def send_feedback(self):
         for name in self.feedback:
             email = self.users[name]
             self.send_email(name, email)
-            print 'Email sent to {}.'.format(name)
+            if not self.test:
+                print 'Email sent to {}.'.format(name)
 
     def destroy(self):
-        self.server.quit()
+        if not self.test:
+            self.server.quit()
 
 
 if __name__ == '__main__':
     username, password = parse()
     feedback_sender = FeedbackSender(username, password)
-    feedback_sender.send_feedback()
-    feedback_sender.destroy()
