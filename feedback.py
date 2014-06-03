@@ -34,6 +34,9 @@ Do: {do}
 Don't: {dont}
 """
 
+USER_FILE = 'users.json'
+FEEDBACK_FILE = 'safe_feedback.csv'
+
 
 def u(s):
     try:
@@ -53,9 +56,6 @@ def parse():
 
 
 class FeedbackSender(object):
-
-    USER_FILE = 'users.json'
-    FEEDBACK_FILE = 'safe_feedback.csv'
 
     def __init__(self, username=None, password=None):
         self.test = username is None or password is None
@@ -79,7 +79,7 @@ class FeedbackSender(object):
         self.server = server
 
     def parse_users(self):
-        with open(self.USER_FILE) as user_file:
+        with open(USER_FILE) as user_file:
             user_list = json.load(user_file)
 
         user_dict = {}
@@ -93,7 +93,7 @@ class FeedbackSender(object):
         feedback_dict = defaultdict(list)
         fieldnames = ('date', 'name', 'grade', 'do', '_', 'dont')
         exclude = ('name', '_')
-        with open(self.FEEDBACK_FILE, 'rb') as feedback_file:
+        with open(FEEDBACK_FILE, 'rb') as feedback_file:
             feedback_reader = csv.DictReader(
                 feedback_file, fieldnames=fieldnames)
             for row in feedback_reader:
